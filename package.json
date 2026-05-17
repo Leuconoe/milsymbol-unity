@@ -1,0 +1,18 @@
+{
+  "name": "com.leuconoe.milsymbol-unity",
+  "version": "0.1.0",
+  "displayName": "Milsymbol Unity",
+  "description": "Unity editor tooling and runtime assets for generating military unit symbol icons from milsymbol.js without text fields.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Leuconoe"
+  },
+  "keywords": [
+    "milsymbol",
+    "military",
+    "sidc",
+    "png",
+    "sprite",
+    "unity"
+  ]
+}
