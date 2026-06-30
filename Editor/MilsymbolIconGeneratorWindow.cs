@@ -10,6 +10,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
     {
         private const string DefaultLetterSidc = "SFAPMFQ----B---";
         private const string NodeExecutablePrefsKey = "Leuconoe.MilsymbolUnity.NodeExecutable";
+        private const string OutputFolderPrefsKey = "Leuconoe.MilsymbolUnity.OutputFolder";
+        private const string DefaultOutputFolder = "Assets/Milsymbol Icons";
         private const double AutoPreviewDelaySeconds = 0.45d;
 
         [SerializeField] private MilsymbolIconRequest request = new MilsymbolIconRequest
@@ -17,7 +19,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             sidc = DefaultLetterSidc
         };
 
-        [SerializeField] private string outputFolder = "Assets/Milsymbol Icons";
+        [SerializeField] private string outputFolder = DefaultOutputFolder;
         [SerializeField] private bool createRuntimeAsset = true;
         [SerializeField] private int pngWidth = 512;
         [SerializeField] private int pngHeight = 512;
@@ -249,6 +251,9 @@ namespace Leuconoe.MilsymbolUnity.Editor
         private void OnEnable()
         {
             nodeExecutable = EditorPrefs.GetString(NodeExecutablePrefsKey, "node");
+            // Persist the output folder across full editor restarts (SerializeField only
+            // survives domain reloads, not a restart).
+            outputFolder = EditorPrefs.GetString(OutputFolderPrefsKey, DefaultOutputFolder);
             // Expand the Node setup section only when setup is incomplete; collapse it once
             // the submodule and Node dependencies are ready.
             showNodeSettings = !IsNodeSetupComplete();
@@ -395,7 +400,11 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        outputFolder = EditorGUILayout.TextField("Output Folder", outputFolder);
+                        var editedFolder = EditorGUILayout.TextField("Output Folder", outputFolder);
+                        if (editedFolder != outputFolder)
+                        {
+                            SetOutputFolder(editedFolder);
+                        }
                         if (GUILayout.Button("...", GUILayout.Width(32)))
                         {
                             PickOutputFolder();
@@ -589,6 +598,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
                    MilsymbolNodeDependencyInstaller.AreDependenciesInstalled();
         }
 
+        private void SetOutputFolder(string folder)
+        {
+            outputFolder = folder;
+            EditorPrefs.SetString(OutputFolderPrefsKey, string.IsNullOrWhiteSpace(folder) ? DefaultOutputFolder : folder);
+        }
+
         private void PickOutputFolder()
         {
             var absoluteStart = Path.Combine(Path.GetFullPath(Path.Combine(Application.dataPath, "..")), outputFolder);
@@ -605,7 +620,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
             try
             {
-                outputFolder = MilsymbolSvgGenerator.NormalizeAssetFolder(selected);
+                SetOutputFolder(MilsymbolSvgGenerator.NormalizeAssetFolder(selected));
             }
             catch (Exception exception)
             {

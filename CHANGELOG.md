@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `npm.cmd` shim and its `PATH` dependency.
 - Output Folder picker now updates the field immediately instead of only after the next
   editor refresh (drops keyboard focus and repaints).
+- The Output Folder now persists across full editor restarts (stored in `EditorPrefs`)
+  instead of resetting to the default.
 
 ### Added
 
