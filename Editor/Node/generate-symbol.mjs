@@ -21,6 +21,119 @@ ms.addIcons(std2525d);
 ms.addIcons(std2525e);
 ms.Path2D = path2d;
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------------------
+// Human-readable SIDC description, sourced from milsymbol itself (single source
+// of truth). The letter-SIDC icon names live only as keys in milsymbol's source
+// (sId["KEY"] = [icn["NAME"], ...]); we extract KEY -> [names] once so any SIDC
+// decodes correctly without hand-maintained tables.
+// ---------------------------------------------------------------------------
+function titleCase(value) {
+  return value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function cleanIconName(name) {
+  // Names look like "AR.I.UNMANNED AERIAL VEHICLE" or "GR.IC.FF.INFANTRY";
+  // the meaningful label is the last dotted segment. Slashes would clash with
+  // the field separator, so replace them with spaces.
+  const tail = name.split(".").pop().replace(/\//g, " ").trim();
+  return titleCase(tail);
+}
+
+let iconIndex = null;
+function buildIconIndex() {
+  const index = {};
+  const dir = path.join(here, "..", "..", "milsymbol", "src", "lettersidc", "sidc");
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith(".js"));
+  } catch {
+    return index;
+  }
+
+  for (const file of files) {
+    let src;
+    try {
+      src = fs.readFileSync(path.join(dir, file), "utf8");
+    } catch {
+      continue;
+    }
+
+    // Drop comments so stray ';' or 'icn[' inside them do not pollute parsing.
+    src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+    for (const statement of src.split(";")) {
+      if (statement.indexOf("sId[") === -1) {
+        continue;
+      }
+
+      const keys = [...statement.matchAll(/sId\["([^"]+)"\]/g)].map((m) => m[1]);
+      const names = [...statement.matchAll(/icn\["([^"]+)"\]/g)].map((m) => cleanIconName(m[1]));
+      if (keys.length === 0 || names.length === 0) {
+        continue;
+      }
+
+      for (const key of keys) {
+        index[key] = names;
+      }
+    }
+  }
+
+  return index;
+}
+
+const SCHEME = { S: "Warfighting", G: "Tactical Graphics", W: "METOC", I: "Signals Intelligence", O: "Stability Operations", E: "Emergency Management" };
+const AFFIL = { P: "Pending", U: "Unknown", A: "Assumed Friend", F: "Friend", N: "Neutral", S: "Suspect", H: "Hostile", D: "Exercise Friend", J: "Joker", K: "Faker" };
+const DIM = { P: "Space", A: "Air", G: "Ground", S: "Sea Surface", U: "Subsurface", F: "SOF", X: "Other", Z: "Unknown" };
+const STATUS = { A: "Planned", P: "Present", C: "Fully Capable", D: "Damaged", X: "Destroyed", F: "Full To Capacity" };
+const MOD1 = { A: "Headquarters", E: "Task Force", F: "Feint Dummy", H: "Installation", M: "Mobility", N: "Towed Array" };
+const MOD2 = { A: "Team Crew", B: "Squad", C: "Section", D: "Platoon", E: "Company", F: "Battalion", G: "Regiment", H: "Brigade", I: "Division", J: "Corps", K: "Army" };
+const OOB = { A: "Air", E: "Electronic", C: "Civilian", G: "Ground", N: "Maritime", S: "Strategic Force" };
+
+function decodeChar(map, ch) {
+  if (!ch || ch === "-") {
+    return "-";
+  }
+  return map[ch] || ch;
+}
+
+function describeSidc(rawSidc) {
+  const s = (typeof rawSidc === "string" ? rawSidc : "").toUpperCase();
+  if (s.length < 10) {
+    return "";
+  }
+
+  if (iconIndex === null) {
+    iconIndex = buildIconIndex();
+  }
+
+  const generic = s[0] + "-" + s[2] + "-" + s.substring(4, 10);
+  let symbol = "-";
+  if (iconIndex[generic] && iconIndex[generic].length > 0) {
+    symbol = iconIndex[generic].join("_");
+  } else if (s.substring(4, 10).replace(/-+$/, "").length > 0) {
+    symbol = s.substring(4, 10); // unknown function id: raw
+  }
+
+  return [
+    decodeChar(SCHEME, s[0]),
+    decodeChar(AFFIL, s[1]),
+    decodeChar(DIM, s[2]),
+    decodeChar(STATUS, s[3]),
+    symbol,
+    decodeChar(MOD1, s[10]),
+    decodeChar(MOD2, s[11]),
+    s.substring(12, 14) || "--",
+    decodeChar(OOB, s[14])
+  ].join("/");
+}
+
 const [, , requestPath, responsePath] = process.argv;
 
 if (!requestPath || !responsePath) {
@@ -130,7 +243,8 @@ async function generate(request) {
     width: symbol.width,
     height: symbol.height,
     anchorX: anchor.x,
-    anchorY: anchor.y
+    anchorY: anchor.y,
+    description: describeSidc(sidc)
   };
 }
 

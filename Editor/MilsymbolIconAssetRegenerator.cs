@@ -88,19 +88,22 @@ namespace Leuconoe.MilsymbolUnity.Editor
             var height = Mathf.Clamp(Mathf.CeilToInt(result.height), 16, 4096);
             MilsymbolPngExporter.SavePng(request, ToAbsoluteProjectPath(pngAssetPath), width, height, nodeExecutable);
 
+            // Preserve the texture size already chosen for this icon, if any.
+            var existingImporter = AssetImporter.GetAtPath(pngAssetPath) as TextureImporter;
+            var maxTextureSize = existingImporter != null ? existingImporter.maxTextureSize : 128;
+
             AssetDatabase.ImportAsset(pngAssetPath, ImportAssetOptions.ForceUpdate);
-            MilsymbolSvgGenerator.ConfigureSavedPng(pngAssetPath);
+            MilsymbolSvgGenerator.ConfigureSavedPng(pngAssetPath, maxTextureSize);
 
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(pngAssetPath);
             iconAsset.SetGeneratedData(
                 request,
-                result.svg,
+                string.IsNullOrEmpty(result.description) ? MilsymbolSidcDecoder.Describe(request.sidc) : result.description,
                 result.valid,
                 result.width,
                 result.height,
                 result.Anchor,
-                texture,
-                pngAssetPath);
+                texture);
 
             EditorUtility.SetDirty(iconAsset);
             AssetDatabase.SaveAssets();
@@ -108,11 +111,6 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static string ResolvePngAssetPath(MilsymbolIconAsset iconAsset, string iconAssetPath)
         {
-            if (!string.IsNullOrWhiteSpace(iconAsset.TextureAssetPath))
-            {
-                return NormalizeAssetPath(iconAsset.TextureAssetPath);
-            }
-
             if (iconAsset.Texture != null)
             {
                 var texturePath = AssetDatabase.GetAssetPath(iconAsset.Texture);

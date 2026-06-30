@@ -100,6 +100,18 @@ Milsymbol/Regenerate Icon
 
 The current port keeps JavaScript as the source of truth. Runtime C# code consumes generated PNG and ScriptableObject assets only. If runtime generation becomes necessary, the next step is either a C# draw-instruction pipeline rewrite or embedding a JavaScript runtime.
 
+## Acknowledgements
+
+This package is only a thin Unity editor wrapper. All military symbol rendering is done by
+**[milsymbol](https://github.com/spatialillusions/milsymbol)** by Måns Beckman
+([spatialillusions](https://github.com/spatialillusions)), released under the MIT License.
+All credit and respect for the symbology engine and its MIL-STD-2525 / APP-6 icon data goes
+to the original author and the milsymbol contributors. This project would not exist without
+their work — please support and star the upstream project.
+
+The bundled `milsymbol` submodule retains its original MIT license; see
+`milsymbol/LICENSE`.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).

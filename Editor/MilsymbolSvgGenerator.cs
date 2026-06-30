@@ -26,6 +26,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             public float height;
             public float anchorX;
             public float anchorY;
+            public string description;
             public string error;
 
             public Vector2 Anchor => new Vector2(anchorX, anchorY);
@@ -114,7 +115,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             return assetPath;
         }
 
-        public static string SavePng(string assetFolder, MilsymbolIconRequest request, int width, int height, string nodeExecutable = "node")
+        public static string SavePng(string assetFolder, MilsymbolIconRequest request, int width, int height, string nodeExecutable = "node", int maxTextureSize = 128)
         {
             if (string.IsNullOrWhiteSpace(assetFolder))
             {
@@ -138,12 +139,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
             var assetPath = normalizedFolder + "/" + CreateSidcFileName(request.sidc, ".png");
             MilsymbolPngExporter.SavePng(request, ToAbsoluteProjectPath(assetPath), width, height, nodeExecutable);
             AssetDatabase.ImportAsset(assetPath);
-            ConfigureSavedPng(assetPath);
+            ConfigureSavedPng(assetPath, maxTextureSize);
             EnsureSpriteAtlasForFolder(normalizedFolder);
             return assetPath;
         }
 
-        public static MilsymbolIconAsset SaveIconAsset(string sourceAssetPath, MilsymbolIconRequest request, Result result, string svgOverride = null)
+        public static MilsymbolIconAsset SaveIconAsset(string sourceAssetPath, MilsymbolIconRequest request, Result result)
         {
             // Overwrite an existing icon asset with the same name instead of creating a numbered copy.
             var assetPath = Path.ChangeExtension(sourceAssetPath, ".asset").Replace("\\", "/");
@@ -152,13 +153,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(sourceAssetPath);
             asset.SetGeneratedData(
                 request,
-                string.IsNullOrEmpty(svgOverride) ? result.svg : svgOverride,
+                string.IsNullOrEmpty(result.description) ? MilsymbolSidcDecoder.Describe(request.sidc) : result.description,
                 result.valid,
                 result.width,
                 result.height,
                 result.Anchor,
-                texture,
-                texture == null ? "" : sourceAssetPath);
+                texture);
             AssetDatabase.CreateAsset(asset, assetPath);
             AssetDatabase.SaveAssets();
             return asset;
@@ -294,7 +294,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             return string.IsNullOrWhiteSpace(sanitized) ? "milsymbol-icon.svg" : sanitized;
         }
 
-        public static void ConfigureSavedPng(string assetPath)
+        public static void ConfigureSavedPng(string assetPath, int maxTextureSize = 128)
         {
             var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer == null)
@@ -308,7 +308,16 @@ namespace Leuconoe.MilsymbolUnity.Editor
             importer.mipmapEnabled = false;
             importer.isReadable = false;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.maxTextureSize = ClampTextureSize(maxTextureSize);
             importer.SaveAndReimport();
+        }
+
+        /// <summary>Clamps to the power-of-two range Unity's importer accepts (32-16384).</summary>
+        public static int ClampTextureSize(int size)
+        {
+            var clamped = Mathf.Clamp(size, 32, 16384);
+            var power = Mathf.RoundToInt(Mathf.Pow(2f, Mathf.Round(Mathf.Log(clamped, 2f))));
+            return Mathf.Clamp(power, 32, 16384);
         }
 
         private static void EnsureSpriteAtlasForFolder(string assetFolder)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Leuconoe.MilsymbolUnity;
 using UnityEditor;
@@ -12,6 +13,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
         private const string NodeExecutablePrefsKey = "Leuconoe.MilsymbolUnity.NodeExecutable";
         private const string OutputFolderPrefsKey = "Leuconoe.MilsymbolUnity.OutputFolder";
         private const string DefaultOutputFolder = "Assets/Milsymbol Icons";
+        private const string TextureSizePrefsKey = "Leuconoe.MilsymbolUnity.TextureSize";
+        private const int DefaultTextureSize = 128;
+        private const string BatchSidcPrefsKey = "Leuconoe.MilsymbolUnity.BatchSidc";
+
+        private static readonly int[] TextureSizeValues = { 32, 64, 128, 256, 512, 1024, 2048 };
+        private static readonly string[] TextureSizeLabels = { "32", "64", "128", "256", "512", "1024", "2048" };
         private const double AutoPreviewDelaySeconds = 0.45d;
 
         [SerializeField] private MilsymbolIconRequest request = new MilsymbolIconRequest
@@ -24,6 +31,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         [SerializeField] private int pngWidth = 512;
         [SerializeField] private int pngHeight = 512;
         [SerializeField] private int pngAntiAliasing = 1;
+        [SerializeField] private int textureSize = DefaultTextureSize;
         [SerializeField] private bool autoPreview = true;
         [SerializeField] private bool useSidcBuilder = true;
         [SerializeField] private bool showStyle;
@@ -37,6 +45,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         [SerializeField] private int sidcSymbolPartOneIndex;
         [SerializeField] private int sidcSymbolDomainIndex;
         [SerializeField] private int sidcSpecificSymbolIndex = 2;
+        [SerializeField] private int sidcSpecificModifierIndex;
         [SerializeField] private string sidcFunctionId = "MFQ---";
         [SerializeField] private int sidcModifierOneIndex;
         [SerializeField] private int sidcModifierTwoIndex = 2;
@@ -44,6 +53,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         [SerializeField] private int sidcOrderOfBattleIndex;
 
         private string nodeExecutable;
+        private string batchSidc = "";
         private bool showNodeSettings;
         private MilsymbolSvgGenerator.Result lastResult;
         private string editableSvg = "";
@@ -244,7 +254,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         public static void Open()
         {
             var window = GetWindow<MilsymbolIconGeneratorWindow>("Milsymbol Icons");
-            window.minSize = new Vector2(460, 560);
+            window.minSize = new Vector2(820, 600);
             window.Show();
         }
 
@@ -254,6 +264,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
             // Persist the output folder across full editor restarts (SerializeField only
             // survives domain reloads, not a restart).
             outputFolder = EditorPrefs.GetString(OutputFolderPrefsKey, DefaultOutputFolder);
+            textureSize = EditorPrefs.GetInt(TextureSizePrefsKey, DefaultTextureSize);
+            batchSidc = EditorPrefs.GetString(BatchSidcPrefsKey, "");
             // Expand the Node setup section only when setup is incomplete; collapse it once
             // the submodule and Node dependencies are ready.
             showNodeSettings = !IsNodeSetupComplete();
@@ -293,7 +305,9 @@ namespace Leuconoe.MilsymbolUnity.Editor
             {
                 using (new EditorGUI.IndentLevelScope())
                 {
-                    nodeExecutable = EditorGUILayout.TextField("Node Executable", nodeExecutable);
+                    nodeExecutable = EditorGUILayout.TextField(
+                        FieldLabel("Node Executable", "Path to the node binary. Leave as 'node' to auto-detect common install locations."),
+                        nodeExecutable);
                     if (GUILayout.Button("Save Node Setting"))
                     {
                         EditorPrefs.SetString(NodeExecutablePrefsKey, string.IsNullOrWhiteSpace(nodeExecutable) ? "node" : nodeExecutable);
@@ -334,32 +348,56 @@ namespace Leuconoe.MilsymbolUnity.Editor
             EditorGUILayout.Space(8);
             using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.MinWidth(360)))
+                using (new EditorGUILayout.VerticalScope(GUILayout.MinWidth(460)))
                 {
                     EditorGUI.BeginChangeCheck();
 
                     EditorGUILayout.LabelField("Symbol", EditorStyles.boldLabel);
-                    if (useSidcBuilder)
+
+                    // SIDC is always directly editable, even while the builder is shown.
+                    EditorGUI.BeginChangeCheck();
+                    var typedSidc = EditorGUILayout.TextField(
+                        FieldLabel("SIDC", "15-character letter SIDC. Editable directly even when the builder is on; typing here syncs the builder."),
+                        request.sidc);
+                    var sidcEditedManually = EditorGUI.EndChangeCheck();
+                    if (sidcEditedManually)
                     {
-                        request.sidc = BuildSidcFromBuilder();
-                        using (new EditorGUI.DisabledScope(true))
+                        request.sidc = typedSidc;
+                        if (useSidcBuilder)
                         {
-                            EditorGUILayout.TextField("SIDC", request.sidc);
+                            // Keep the builder dropdowns in step with the typed SIDC.
+                            SyncBuilderFromSidc(typedSidc);
                         }
                     }
-                    else
+
+                    EditorGUI.BeginChangeCheck();
+                    var builderEnabled = EditorGUILayout.Toggle(
+                        FieldLabel("Use SIDC Builder", "Build the SIDC from dropdowns. Turn off to type a SIDC freely."),
+                        useSidcBuilder);
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        request.sidc = EditorGUILayout.TextField("SIDC", request.sidc);
+                        useSidcBuilder = builderEnabled;
+                        if (useSidcBuilder)
+                        {
+                            SyncBuilderFromSidc(request.sidc);
+                        }
                     }
 
-                    useSidcBuilder = EditorGUILayout.Toggle("Use SIDC Builder", useSidcBuilder);
                     if (useSidcBuilder)
                     {
+                        EditorGUI.BeginChangeCheck();
                         DrawSidcBuilder();
-                        request.sidc = BuildSidcFromBuilder();
+                        // Only rebuild from the dropdowns when they actually change, so a
+                        // manual SIDC edit in the same frame is not overwritten.
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            request.sidc = BuildSidcFromBuilder();
+                        }
                     }
 
-                    request.standard = (MilsymbolStandard)EditorGUILayout.EnumPopup("Standard", request.standard);
+                    request.standard = (MilsymbolStandard)EditorGUILayout.EnumPopup(
+                        FieldLabel("Standard", "Symbol standard milsymbol renders with: Auto / MIL-STD-2525 / APP-6."),
+                        request.standard);
                     request.iconOnly = true;
                     using (new EditorGUI.DisabledScope(true))
                     {
@@ -400,7 +438,9 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        var editedFolder = EditorGUILayout.TextField("Output Folder", outputFolder);
+                        var editedFolder = EditorGUILayout.TextField(
+                            FieldLabel("Output Folder", "Project-relative folder under Assets where generated PNG/.asset files are saved. Persists across restarts."),
+                            outputFolder);
                         if (editedFolder != outputFolder)
                         {
                             SetOutputFolder(editedFolder);
@@ -414,6 +454,17 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     using (new EditorGUI.DisabledScope(true))
                     {
                         EditorGUILayout.TextField("File Name", GetAutomaticPngFileName());
+                    }
+
+                    var editedTextureSize = EditorGUILayout.IntPopup(
+                        FieldLabel("Texture Size", "Imported sprite max size (TextureImporter.maxTextureSize). Independent of the rendered PNG resolution."),
+                        textureSize,
+                        Array.ConvertAll(TextureSizeLabels, label => new GUIContent(label)),
+                        TextureSizeValues);
+                    if (editedTextureSize != textureSize)
+                    {
+                        textureSize = editedTextureSize;
+                        EditorPrefs.SetInt(TextureSizePrefsKey, textureSize);
                     }
 
                     createRuntimeAsset = EditorGUILayout.Toggle("Create .asset", createRuntimeAsset);
@@ -576,10 +627,10 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     return;
                 }
 
-                var pngPath = MilsymbolSvgGenerator.SavePng(outputFolder, request, pngWidth, pngHeight, nodeExecutable);
+                var pngPath = MilsymbolSvgGenerator.SavePng(outputFolder, request, pngWidth, pngHeight, nodeExecutable, textureSize);
                 if (createRuntimeAsset)
                 {
-                    MilsymbolSvgGenerator.SaveIconAsset(pngPath, request, lastResult, editableSvg);
+                    MilsymbolSvgGenerator.SaveIconAsset(pngPath, request, lastResult);
                 }
 
                 AssetDatabase.Refresh();
@@ -716,34 +767,178 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     Save();
                 }
             }
+
+            DrawBatch();
+        }
+
+        private void DrawBatch()
+        {
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Batch", EditorStyles.boldLabel);
+
+            var batchTooltip = new GUIContent(
+                "SIDCs (comma-separated)",
+                "Enter one or more 15-character letter SIDCs separated by commas " +
+                "(semicolons or new lines also work).\n" +
+                "Each is rendered with the current Standard, Style and Texture Size, then saved as a " +
+                "PNG (and optional .asset) into the Output Folder. Duplicates are skipped.\n" +
+                "Example: SFAPMFQR-------,SHGPEWT--------");
+            EditorGUILayout.LabelField(batchTooltip, EditorStyles.miniLabel);
+
+            var wrapStyle = new GUIStyle(EditorStyles.textArea) { wordWrap = true };
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                // wordWrap keeps a long comma-separated line from stretching the layout.
+                var edited = EditorGUILayout.TextArea(
+                    batchSidc ?? "",
+                    wrapStyle,
+                    GUILayout.Height(64),
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.MaxWidth(360));
+                if (edited != batchSidc)
+                {
+                    batchSidc = edited;
+                    EditorPrefs.SetString(BatchSidcPrefsKey, batchSidc ?? "");
+                }
+
+                var batchButton = new GUIContent(
+                    "Generate\nTo Folder",
+                    "Generate every SIDC above into the Output Folder.");
+                if (GUILayout.Button(batchButton, GUILayout.Width(96), GUILayout.Height(64)))
+                {
+                    GenerateBatchToOutputFolder();
+                }
+            }
+        }
+
+        private void GenerateBatchToOutputFolder()
+        {
+            var sidcs = (batchSidc ?? "").Split(new[] { ',', '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var unique = new List<string>();
+            foreach (var raw in sidcs)
+            {
+                var trimmed = raw.Trim();
+                if (trimmed.Length > 0 && !unique.Contains(trimmed))
+                {
+                    unique.Add(trimmed);
+                }
+            }
+
+            if (unique.Count == 0)
+            {
+                status = "Enter one or more SIDCs (comma-separated) before batch generating.";
+                return;
+            }
+
+            if (!MilsymbolNodeDependencyInstaller.EnsureInstalledOrPrompt())
+            {
+                status = "Batch canceled because Node dependencies are missing.";
+                return;
+            }
+
+            var generated = 0;
+            var failures = new List<string>();
+            try
+            {
+                for (var i = 0; i < unique.Count; i++)
+                {
+                    var sidc = unique[i];
+                    EditorUtility.DisplayProgressBar("Milsymbol Batch", "Generating " + sidc, (float)i / unique.Count);
+                    try
+                    {
+                        var req = new MilsymbolIconRequest
+                        {
+                            sidc = sidc,
+                            standard = request.standard,
+                            iconOnly = true,
+                            style = request.style
+                        };
+
+                        var result = MilsymbolSvgGenerator.Generate(req, nodeExecutable);
+                        var pngPath = MilsymbolSvgGenerator.SavePng(outputFolder, req, pngWidth, pngHeight, nodeExecutable, textureSize);
+                        if (createRuntimeAsset)
+                        {
+                            MilsymbolSvgGenerator.SaveIconAsset(pngPath, req, result);
+                        }
+
+                        generated++;
+                    }
+                    catch (Exception exception)
+                    {
+                        failures.Add(sidc + ": " + exception.Message);
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            AssetDatabase.Refresh();
+
+            status = "Batch generated " + generated + "/" + unique.Count + " into " + outputFolder + ".";
+            if (failures.Count > 0)
+            {
+                status += "\nFailed: " + string.Join("; ", failures);
+                Debug.LogWarning("Milsymbol batch failures:\n" + string.Join("\n", failures));
+            }
         }
 
         private void DrawSidcBuilder()
         {
-            sidcCodingSchemeIndex = DrawPopup("Coding Scheme", sidcCodingSchemeIndex, CodingSchemes);
-            sidcAffiliationIndex = DrawPopup("Affiliation", sidcAffiliationIndex, Affiliations);
-            sidcBattleDimensionIndex = DrawPopup("Battle Dimension", sidcBattleDimensionIndex, BattleDimensions);
-            sidcStatusIndex = DrawPopup("Status", sidcStatusIndex, Statuses);
+            sidcCodingSchemeIndex = DrawPopup("Coding Scheme", "SIDC position 1: symbology set (S=Warfighting, G=Tactical Graphics, W=METOC, I=SIGINT, ...).", sidcCodingSchemeIndex, CodingSchemes);
+            sidcAffiliationIndex = DrawPopup("Affiliation", "SIDC position 2: friend / hostile / neutral / unknown and exercise variants.", sidcAffiliationIndex, Affiliations);
+            sidcBattleDimensionIndex = DrawPopup("Battle Dimension", "SIDC position 3: Air / Ground / Sea Surface / Subsurface / Space / SOF.", sidcBattleDimensionIndex, BattleDimensions);
+            sidcStatusIndex = DrawPopup("Status", "SIDC position 4: Present / Planned / Fully Capable / Damaged / Destroyed.", sidcStatusIndex, Statuses);
 
-            sidcSymbolPartOneIndex = DrawPopup("Symbol Code Part 1", sidcSymbolPartOneIndex, SymbolPartOnes);
-            sidcSymbolDomainIndex = DrawPopup("Symbol Code Domain", sidcSymbolDomainIndex, SymbolDomains);
+            sidcSymbolPartOneIndex = DrawPopup("Symbol Code Part 1", "Entity kind helper: Unit / Equipment / Installation.", sidcSymbolPartOneIndex, SymbolPartOnes);
+            sidcSymbolDomainIndex = DrawPopup("Symbol Code Domain", "Entity domain used to list the specific symbols below.", sidcSymbolDomainIndex, SymbolDomains);
 
             var specificSymbols = SpecificSymbolsForDomain(SymbolDomains[ClampIndex(sidcSymbolDomainIndex, SymbolDomains.Length)].Value);
-            sidcSpecificSymbolIndex = EditorGUILayout.Popup("Specific Symbol", ClampIndex(sidcSpecificSymbolIndex, specificSymbols.Length), Labels(specificSymbols));
+            sidcSpecificSymbolIndex = EditorGUILayout.Popup(
+                FieldLabel("Specific Symbol", "Common entity for this domain. For anything more granular, type the SIDC directly above."),
+                ClampIndex(sidcSpecificSymbolIndex, specificSymbols.Length),
+                Labels(specificSymbols));
             var selectedSpecificSymbol = specificSymbols[ClampIndex(sidcSpecificSymbolIndex, specificSymbols.Length)];
+
+            // Variable sub-type (e.g. UAV/aircraft role): enabled only for symbols that
+            // define variants; disabled for the rest.
+            var variants = VariantsForSymbol(selectedSpecificSymbol);
+            var hasVariants = variants.Length > 1;
+            using (new EditorGUI.DisabledScope(!hasVariants))
+            {
+                sidcSpecificModifierIndex = EditorGUILayout.Popup(
+                    FieldLabel("Variant", "Sub-type appended to the function id (e.g. UAV role: Reconnaissance/Attack/Bomber). Disabled for symbols without variants."),
+                    ClampIndex(sidcSpecificModifierIndex, variants.Length),
+                    Labels(variants));
+            }
+
             if (!string.IsNullOrEmpty(selectedSpecificSymbol.FunctionId))
             {
-                sidcFunctionId = selectedSpecificSymbol.FunctionId;
+                if (hasVariants)
+                {
+                    var baseCode = selectedSpecificSymbol.FunctionId.TrimEnd('-');
+                    var suffix = variants[ClampIndex(sidcSpecificModifierIndex, variants.Length)].Value;
+                    sidcFunctionId = NormalizePart(baseCode + suffix, 6, "------");
+                }
+                else
+                {
+                    sidcFunctionId = selectedSpecificSymbol.FunctionId;
+                }
             }
             else
             {
-                sidcFunctionId = EditorGUILayout.TextField("Custom Function ID", sidcFunctionId).ToUpperInvariant();
+                sidcFunctionId = EditorGUILayout.TextField(
+                    FieldLabel("Custom Function ID", "Raw 6-char function id (SIDC positions 5-10), e.g. MFQR--."),
+                    sidcFunctionId).ToUpperInvariant();
             }
 
-            sidcModifierOneIndex = DrawPopup("Modifier 1", sidcModifierOneIndex, ModifierOnes);
-            sidcModifierTwoIndex = DrawPopup("Modifier 2", sidcModifierTwoIndex, ModifierTwos);
-            sidcCountryCode = EditorGUILayout.TextField("Country Code", NormalizePart(sidcCountryCode, 2, "--")).ToUpperInvariant();
-            sidcOrderOfBattleIndex = DrawPopup("Order Of Battle", sidcOrderOfBattleIndex, OrderOfBattleOptions);
+            sidcModifierOneIndex = DrawPopup("Modifier 1", "SIDC position 11: symbol modifier (HQ / Task Force / Feint / Mobility ...).", sidcModifierOneIndex, ModifierOnes);
+            sidcModifierTwoIndex = DrawPopup("Modifier 2", "SIDC position 12: echelon size (Team / Squad / Platoon ... Army).", sidcModifierTwoIndex, ModifierTwos);
+            sidcCountryCode = EditorGUILayout.TextField(
+                FieldLabel("Country Code", "SIDC positions 13-14: country code (-- = none)."),
+                NormalizePart(sidcCountryCode, 2, "--")).ToUpperInvariant();
+            sidcOrderOfBattleIndex = DrawPopup("Order Of Battle", "SIDC position 15: order of battle (Air / Electronic / Ground / Maritime ...).", sidcOrderOfBattleIndex, OrderOfBattleOptions);
         }
 
         private string BuildSidcFromBuilder()
@@ -785,16 +980,80 @@ namespace Leuconoe.MilsymbolUnity.Editor
             {
                 for (var symbolIndex = 0; symbolIndex < domains[domainIndex].Length; symbolIndex++)
                 {
-                    if (string.Equals(domains[domainIndex][symbolIndex].FunctionId, functionId, StringComparison.Ordinal))
+                    var symbol = domains[domainIndex][symbolIndex];
+                    if (string.IsNullOrEmpty(symbol.FunctionId))
+                    {
+                        continue;
+                    }
+
+                    if (string.Equals(symbol.FunctionId, functionId, StringComparison.Ordinal))
                     {
                         sidcSymbolDomainIndex = domainIndex;
                         sidcSpecificSymbolIndex = symbolIndex;
+                        sidcSpecificModifierIndex = 0;
                         return;
+                    }
+
+                    // Match a variant: base function id is a prefix and the suffix is a
+                    // known variant code (e.g. functionId "MFQR--" -> base "MFQ", variant "R").
+                    if (SpecificSymbolVariants.TryGetValue(symbol.FunctionId, out var variants))
+                    {
+                        var baseCode = symbol.FunctionId.TrimEnd('-');
+                        if (functionId.StartsWith(baseCode, StringComparison.Ordinal))
+                        {
+                            var suffix = functionId.Substring(baseCode.Length).TrimEnd('-');
+                            var variantIndex = FindIndex(variants, suffix);
+                            if (variantIndex >= 0)
+                            {
+                                sidcSymbolDomainIndex = domainIndex;
+                                sidcSpecificSymbolIndex = symbolIndex;
+                                sidcSpecificModifierIndex = variantIndex;
+                                return;
+                            }
+                        }
                     }
                 }
             }
 
             sidcSpecificSymbolIndex = SpecificSymbolsForDomain(SymbolDomains[ClampIndex(sidcSymbolDomainIndex, SymbolDomains.Length)].Value).Length - 1;
+        }
+
+        // Specific symbols whose function id supports a variable sub-type suffix. Keyed by
+        // the base function id. Shared with MilsymbolSidcDecoder so build/parse stay in sync.
+        private static readonly SidcStringOption[] NoVariants = { new SidcStringOption("None (-)", "") };
+        private static readonly SidcStringOption[] UavVariants = BuildVariants(MilsymbolSidcDecoder.UavRoles);
+        private static readonly SidcStringOption[] AirVariants = BuildVariants(MilsymbolSidcDecoder.AirRoles);
+        private static readonly Dictionary<string, SidcStringOption[]> SpecificSymbolVariants =
+            new Dictionary<string, SidcStringOption[]>
+            {
+                { "MFQ---", UavVariants },
+                { "MF----", AirVariants },
+                { "MH----", AirVariants }
+            };
+
+        private static SidcStringOption[] BuildVariants(MilsymbolSidcDecoder.Variant[] roles)
+        {
+            var options = new SidcStringOption[roles.Length];
+            for (var i = 0; i < roles.Length; i++)
+            {
+                // Show the appended code in the dropdown, e.g. "Attack (A)" / "None (-)",
+                // matching the other SIDC dropdowns. The stored Value stays the raw code.
+                var code = string.IsNullOrEmpty(roles[i].Code) ? "-" : roles[i].Code;
+                options[i] = new SidcStringOption(roles[i].Label + " (" + code + ")", roles[i].Code);
+            }
+
+            return options;
+        }
+
+        private static SidcStringOption[] VariantsForSymbol(SidcSymbolOption symbol)
+        {
+            if (!string.IsNullOrEmpty(symbol.FunctionId) &&
+                SpecificSymbolVariants.TryGetValue(symbol.FunctionId, out var variants))
+            {
+                return variants;
+            }
+
+            return NoVariants;
         }
 
         private static SidcSymbolOption[] SpecificSymbolsForDomain(char domain)
@@ -812,9 +1071,20 @@ namespace Leuconoe.MilsymbolUnity.Editor
             }
         }
 
-        private static int DrawPopup(string label, int index, SidcCharOption[] options)
+        private static int DrawPopup(string label, string tooltip, int index, SidcCharOption[] options)
         {
-            return EditorGUILayout.Popup(label, ClampIndex(index, options.Length), Labels(options));
+            return EditorGUILayout.Popup(FieldLabel(label, tooltip), ClampIndex(index, options.Length), Labels(options));
+        }
+
+        /// <summary>
+        /// Builds a label GUIContent. When a tooltip is supplied, a " (?)" marker is appended
+        /// to the visible label so users can tell which fields have hover help.
+        /// </summary>
+        private static GUIContent FieldLabel(string label, string tooltip)
+        {
+            return string.IsNullOrEmpty(tooltip)
+                ? new GUIContent(label)
+                : new GUIContent(label + " (?)", tooltip);
         }
 
         private static string NormalizePart(string value, int length, string fallback)
