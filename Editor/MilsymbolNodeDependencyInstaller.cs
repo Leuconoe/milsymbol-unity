@@ -32,6 +32,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         public static bool EnsureInstalledOrPrompt()
         {
+            // The submodule must be present before npm can install its dependencies.
+            if (!MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
+            {
+                return false;
+            }
+
             if (AreDependenciesInstalled())
             {
                 return true;
@@ -80,6 +86,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static string Install()
         {
+            MilsymbolSubmoduleInstaller.EnsureCheckedOut(false);
+
             var milsymbolRoot = FindMilsymbolRoot(true);
             var packageJson = Path.Combine(milsymbolRoot, "package.json");
             if (!File.Exists(packageJson))
@@ -102,16 +110,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
             using (var process = new Process())
             {
-                process.StartInfo = new ProcessStartInfo
-                {
-                    FileName = GetNpmExecutable(),
-                    Arguments = "install --omit=dev",
-                    WorkingDirectory = workingDirectory,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
+                process.StartInfo = BuildNpmInstallStartInfo(workingDirectory);
 
                 process.OutputDataReceived += (_, args) =>
                 {
@@ -135,7 +134,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 catch (Exception exception)
                 {
                     throw new InvalidOperationException(
-                        "Failed to start npm. Install Node.js/npm or make sure npm is available from PATH.",
+                        "Failed to start npm. Install Node.js/npm, or set the full node path in " +
+                        "Tools/Milsymbol/Icon Generator > Node Executable.",
                         exception);
                 }
 
@@ -195,9 +195,78 @@ namespace Leuconoe.MilsymbolUnity.Editor
             return "";
         }
 
-        private static string GetNpmExecutable()
+        /// <summary>
+        /// Builds the process to run "npm install --omit=dev". Prefers invoking npm's CLI
+        /// entry point through the resolved node binary, which avoids the Windows npm.cmd
+        /// shim and the login-shell PATH dependency entirely. Falls back to launching the
+        /// resolved npm executable directly.
+        /// </summary>
+        private static ProcessStartInfo BuildNpmInstallStartInfo(string workingDirectory)
         {
-            return Application.platform == RuntimePlatform.WindowsEditor ? "npm.cmd" : "npm";
+            var node = MilsymbolToolLocator.ResolveNode();
+            const string npmArguments = "install --omit=dev";
+
+            var startInfo = new ProcessStartInfo
+            {
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            var npmCli = FindNpmCli(node);
+            if (!string.IsNullOrEmpty(npmCli))
+            {
+                startInfo.FileName = node;
+                startInfo.Arguments = Quote(npmCli) + " " + npmArguments;
+            }
+            else
+            {
+                startInfo.FileName = MilsymbolToolLocator.ResolveNpm();
+                startInfo.Arguments = npmArguments;
+            }
+
+            MilsymbolToolLocator.PrepareEnvironment(startInfo, node, startInfo.FileName);
+            return startInfo;
+        }
+
+        /// <summary>Locates npm-cli.js bundled next to the node binary, if present.</summary>
+        private static string FindNpmCli(string nodePath)
+        {
+            if (string.IsNullOrEmpty(nodePath) || nodePath.IndexOf(Path.DirectorySeparatorChar) < 0)
+            {
+                return "";
+            }
+
+            var nodeDir = Path.GetDirectoryName(nodePath);
+            if (string.IsNullOrEmpty(nodeDir))
+            {
+                return "";
+            }
+
+            var candidates = new[]
+            {
+                // Windows global install layout: node.exe and node_modules share a dir.
+                Path.Combine(nodeDir, "node_modules", "npm", "bin", "npm-cli.js"),
+                // Unix layout: bin/node with lib/node_modules alongside.
+                Path.Combine(Path.GetDirectoryName(nodeDir) ?? nodeDir, "lib", "node_modules", "npm", "bin", "npm-cli.js")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return "";
+        }
+
+        private static string Quote(string value)
+        {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
     }
 }

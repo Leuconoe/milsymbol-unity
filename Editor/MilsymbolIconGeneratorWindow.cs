@@ -287,6 +287,21 @@ namespace Leuconoe.MilsymbolUnity.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField(
+                    "milsymbol Submodule",
+                    MilsymbolSubmoduleInstaller.IsCheckedOut() ? "Ready" : "Missing");
+
+                if (GUILayout.Button("Update", GUILayout.Width(96)))
+                {
+                    if (MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
+                    {
+                        status = "milsymbol submodule is ready.";
+                    }
+                }
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(
                     "Node Dependencies",
                     MilsymbolNodeDependencyInstaller.AreDependenciesInstalled() ? "Installed" : "Missing");
 

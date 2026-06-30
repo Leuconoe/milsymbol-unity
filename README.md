@@ -25,30 +25,50 @@ This package does not generate symbols at build runtime. Unity Editor calls the 
 ## Requirements
 
 - Unity 2021.3 or newer.
-- Node.js available on `PATH`.
+- Node.js installed. It does **not** need to be on the Editor's `PATH`: the editor tooling
+  probes common install locations (Program Files, Homebrew, nvm, fnm, volta, asdf) and, on
+  macOS/Linux, falls back to your login shell. If auto-detection fails, set the full path to
+  the `node` binary in `Tools/Milsymbol/Icon Generator` > `Node Executable`.
 - The `milsymbol` submodule checked out under this package.
 
 ## Installation
 
-Install through Unity Package Manager with a Git URL:
+### Recommended: clone into your project's `Packages` folder
 
-```text
-https://github.com/Leuconoe/milsymbol-unity.git
+Unity Package Manager git-URL installs do **not** fetch git submodules, so the bundled
+`milsymbol` source would be missing. Clone the package with submodules instead:
+
+```bash
+cd <your-unity-project>/Packages
+git clone --recurse-submodules https://github.com/Leuconoe/milsymbol-unity.git
 ```
 
-If Unity does not initialize nested submodules for your environment, initialize the bundled `milsymbol` submodule manually from the package checkout:
+If you already cloned without `--recurse-submodules`, initialize the submodule:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-Install Node dependencies from Unity:
+From inside Unity you can also run:
+
+```text
+Tools/Milsymbol/Update milsymbol Submodule
+```
+
+This is invoked automatically the first time you install Node dependencies or generate an
+icon, and reports an actionable message when the package is not a git working copy (the
+case for UPM git-URL installs).
+
+### Install Node dependencies
 
 ```text
 Tools/Milsymbol/Install Node Dependencies
 ```
 
-The installer runs `npm install --omit=dev` inside the bundled `milsymbol` submodule so only production dependencies needed for PNG export are installed.
+The installer runs `npm install --omit=dev` inside the bundled `milsymbol` submodule so only
+production dependencies needed for PNG export are installed. npm is invoked through the
+resolved `node` binary (`node npm-cli.js`) so it works even when `npm`/`npm.cmd` is not on the
+Editor's `PATH`.
 
 ## Usage
 
@@ -79,3 +99,7 @@ Milsymbol/Regenerate Icon
 ## Porting Boundary
 
 The current port keeps JavaScript as the source of truth. Runtime C# code consumes generated PNG and ScriptableObject assets only. If runtime generation becomes necessary, the next step is either a C# draw-instruction pipeline rewrite or embedding a JavaScript runtime.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).

@@ -210,7 +210,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static void RunNode(string nodeExecutable, string scriptPath, string requestPath, string responsePath)
         {
-            var executable = string.IsNullOrWhiteSpace(nodeExecutable) ? DefaultNodeExecutable : nodeExecutable;
+            var executable = MilsymbolToolLocator.ResolveNode(nodeExecutable);
             var arguments = Quote(scriptPath) + " " + Quote(requestPath) + " " + Quote(responsePath);
 
             using (var process = new Process())
@@ -225,6 +225,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     RedirectStandardError = true,
                     RedirectStandardOutput = true
                 };
+                MilsymbolToolLocator.PrepareEnvironment(process.StartInfo, executable);
 
                 process.Start();
                 var stdout = process.StandardOutput.ReadToEnd();
