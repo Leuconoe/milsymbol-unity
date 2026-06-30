@@ -164,15 +164,9 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static string FindNodeDir(bool throwIfMissing)
         {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var candidates = new[]
+            foreach (var root in MilsymbolToolLocator.PackageRoots())
             {
-                Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node~"),
-                Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node~")
-            };
-
-            foreach (var candidate in candidates)
-            {
+                var candidate = Path.Combine(root, "Editor", "Node~");
                 if (File.Exists(Path.Combine(candidate, "package.json")))
                 {
                     return candidate;
@@ -182,7 +176,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             if (throwIfMissing)
             {
                 throw new DirectoryNotFoundException(
-                    "Could not find Editor/Node~/package.json under Packages/milsymbol-unity.");
+                    "Could not find Editor/Node~/package.json in the milsymbol-unity package.");
             }
 
             return "";

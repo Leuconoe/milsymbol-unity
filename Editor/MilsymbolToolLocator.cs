@@ -24,6 +24,26 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static readonly bool IsWindows = Application.platform == RuntimePlatform.WindowsEditor;
 
+        /// <summary>
+        /// Candidate physical roots of this package, most-reliable first. The first entry is
+        /// the resolved on-disk path from the Package Manager — this is required for UPM /
+        /// PackageCache installs, where the virtual "Packages/&lt;name&gt;" path is not a valid
+        /// working directory for a launched process. The remaining entries cover embedded
+        /// installs under Packages/.
+        /// </summary>
+        public static IEnumerable<string> PackageRoots()
+        {
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(MilsymbolToolLocator).Assembly);
+            if (info != null && !string.IsNullOrEmpty(info.resolvedPath) && Directory.Exists(info.resolvedPath))
+            {
+                yield return info.resolvedPath;
+            }
+
+            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            yield return Path.Combine(projectRoot, "Packages", "milsymbol-unity");
+            yield return Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity");
+        }
+
         // Cache resolved directories so repeated generations do not re-probe the disk.
         private static readonly Dictionary<string, string> ResolvedToolCache = new Dictionary<string, string>();
 

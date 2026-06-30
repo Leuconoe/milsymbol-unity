@@ -248,35 +248,20 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         internal static string FindGeneratorScriptPath()
         {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             // Editor/Node~ uses a trailing '~' so Unity ignores the folder (and its
-            // node_modules), so the script is located by file path, not as a Unity asset.
-            var directPath = Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node~", "generate-symbol.mjs");
-            if (File.Exists(directPath))
+            // node_modules); the script is located by physical file path, not as a Unity
+            // asset. PackageRoots() resolves the real on-disk path (required for UPM /
+            // PackageCache installs, where "Packages/<name>" is virtual).
+            foreach (var root in MilsymbolToolLocator.PackageRoots())
             {
-                return directPath;
-            }
-
-            var packagePath = Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node~", "generate-symbol.mjs");
-            if (File.Exists(packagePath))
-            {
-                return packagePath;
-            }
-
-            var packagesPath = Path.Combine(projectRoot, "Packages");
-            var matches = Directory.Exists(packagesPath)
-                ? Directory.GetFiles(packagesPath, "generate-symbol.mjs", SearchOption.AllDirectories)
-                : Array.Empty<string>();
-
-            foreach (var match in matches)
-            {
-                if (match.Replace("\\", "/").EndsWith("/Editor/Node~/generate-symbol.mjs", StringComparison.Ordinal))
+                var candidate = Path.Combine(root, "Editor", "Node~", "generate-symbol.mjs");
+                if (File.Exists(candidate))
                 {
-                    return match;
+                    return candidate;
                 }
             }
 
-            throw new FileNotFoundException("Could not find Editor/Node~/generate-symbol.mjs in Packages.");
+            throw new FileNotFoundException("Could not find Editor/Node~/generate-symbol.mjs in the milsymbol-unity package.");
         }
 
         private static string ToAbsoluteProjectPath(string assetPath)
