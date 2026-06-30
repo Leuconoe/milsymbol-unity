@@ -42,6 +42,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         [SerializeField] private int sidcOrderOfBattleIndex;
 
         private string nodeExecutable;
+        private bool showNodeSettings;
         private MilsymbolSvgGenerator.Result lastResult;
         private string editableSvg = "";
         private Texture2D previewTexture;
@@ -248,6 +249,9 @@ namespace Leuconoe.MilsymbolUnity.Editor
         private void OnEnable()
         {
             nodeExecutable = EditorPrefs.GetString(NodeExecutablePrefsKey, "node");
+            // Expand the Node setup section only when setup is incomplete; collapse it once
+            // the submodule and Node dependencies are ready.
+            showNodeSettings = !IsNodeSetupComplete();
             if (request == null)
             {
                 request = new MilsymbolIconRequest();
@@ -277,39 +281,47 @@ namespace Leuconoe.MilsymbolUnity.Editor
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);
 
-            EditorGUILayout.LabelField("Generator", EditorStyles.boldLabel);
-            nodeExecutable = EditorGUILayout.TextField("Node Executable", nodeExecutable);
-            if (GUILayout.Button("Save Node Setting"))
+            var setupReady = IsNodeSetupComplete();
+            var generatorHeader = setupReady ? "Generator (ready)" : "Generator (setup required)";
+            showNodeSettings = EditorGUILayout.Foldout(showNodeSettings, generatorHeader, true, EditorStyles.foldoutHeader);
+            if (showNodeSettings)
             {
-                EditorPrefs.SetString(NodeExecutablePrefsKey, string.IsNullOrWhiteSpace(nodeExecutable) ? "node" : nodeExecutable);
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(
-                    "milsymbol Submodule",
-                    MilsymbolSubmoduleInstaller.IsCheckedOut() ? "Ready" : "Missing");
-
-                if (GUILayout.Button("Update", GUILayout.Width(96)))
+                using (new EditorGUI.IndentLevelScope())
                 {
-                    if (MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
+                    nodeExecutable = EditorGUILayout.TextField("Node Executable", nodeExecutable);
+                    if (GUILayout.Button("Save Node Setting"))
                     {
-                        status = "milsymbol submodule is ready.";
+                        EditorPrefs.SetString(NodeExecutablePrefsKey, string.IsNullOrWhiteSpace(nodeExecutable) ? "node" : nodeExecutable);
                     }
-                }
-            }
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(
-                    "Node Dependencies",
-                    MilsymbolNodeDependencyInstaller.AreDependenciesInstalled() ? "Installed" : "Missing");
-
-                if (GUILayout.Button("Install", GUILayout.Width(96)))
-                {
-                    if (MilsymbolNodeDependencyInstaller.InstallWithDialog())
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        status = "Node dependencies are installed.";
+                        EditorGUILayout.LabelField(
+                            "milsymbol Submodule",
+                            MilsymbolSubmoduleInstaller.IsCheckedOut() ? "Ready" : "Missing");
+
+                        if (GUILayout.Button("Update", GUILayout.Width(96)))
+                        {
+                            if (MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
+                            {
+                                status = "milsymbol submodule is ready.";
+                            }
+                        }
+                    }
+
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.LabelField(
+                            "Node Dependencies",
+                            MilsymbolNodeDependencyInstaller.AreDependenciesInstalled() ? "Installed" : "Missing");
+
+                        if (GUILayout.Button("Install", GUILayout.Width(96)))
+                        {
+                            if (MilsymbolNodeDependencyInstaller.InstallWithDialog())
+                            {
+                                status = "Node dependencies are installed.";
+                            }
+                        }
                     }
                 }
             }
@@ -571,6 +583,12 @@ namespace Leuconoe.MilsymbolUnity.Editor
             }
         }
 
+        private static bool IsNodeSetupComplete()
+        {
+            return MilsymbolSubmoduleInstaller.IsCheckedOut() &&
+                   MilsymbolNodeDependencyInstaller.AreDependenciesInstalled();
+        }
+
         private void PickOutputFolder()
         {
             var absoluteStart = Path.Combine(Path.GetFullPath(Path.Combine(Application.dataPath, "..")), outputFolder);
@@ -594,6 +612,14 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 status = exception.Message;
                 Debug.LogException(exception);
             }
+
+            // The Output Folder TextField was already drawn with the old value this OnGUI
+            // pass, and IMGUI keeps showing the focused editing buffer. Drop keyboard focus
+            // so the field re-reads `outputFolder`, and repaint so the change shows now
+            // instead of only after the next editor refresh.
+            GUIUtility.keyboardControl = 0;
+            EditorGUIUtility.editingTextField = false;
+            Repaint();
         }
 
         private void SavePngAs()

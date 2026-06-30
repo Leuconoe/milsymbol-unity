@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PATH`. Fixes "npm not found" when Unity is launched from Unity Hub.
 - Invoke npm through the resolved node binary (`node npm-cli.js`) to avoid the Windows
   `npm.cmd` shim and its `PATH` dependency.
+- Output Folder picker now updates the field immediately instead of only after the next
+  editor refresh (drops keyboard focus and repaints).
 
 ### Added
 
@@ -25,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving an icon (PNG, SVG, and `.asset`) now overwrites an existing file with the same
+  name instead of creating a numbered copy.
+- The Generator window's Node setup section is now a foldout: expanded when setup is
+  incomplete and collapsed once the submodule and Node dependencies are ready.
 - README documents cloning into `Packages` with `--recurse-submodules` as the supported
   install path, and that Node no longer needs to be on the Editor `PATH`.
 

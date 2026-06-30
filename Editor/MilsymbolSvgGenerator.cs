@@ -107,7 +107,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 safeFileName += ".svg";
             }
 
-            var assetPath = AssetDatabase.GenerateUniqueAssetPath(normalizedFolder + "/" + safeFileName);
+            // Overwrite an existing file with the same name instead of creating a numbered copy.
+            var assetPath = normalizedFolder + "/" + safeFileName;
             File.WriteAllText(ToAbsoluteProjectPath(assetPath), svg, Utf8NoBom);
             AssetDatabase.ImportAsset(assetPath);
             return assetPath;
@@ -133,7 +134,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
             var normalizedFolder = NormalizeAssetFolder(assetFolder);
             Directory.CreateDirectory(ToAbsoluteProjectPath(normalizedFolder));
 
-            var assetPath = AssetDatabase.GenerateUniqueAssetPath(normalizedFolder + "/" + CreateSidcFileName(request.sidc, ".png"));
+            // Overwrite an existing PNG with the same name instead of creating a numbered copy.
+            var assetPath = normalizedFolder + "/" + CreateSidcFileName(request.sidc, ".png");
             MilsymbolPngExporter.SavePng(request, ToAbsoluteProjectPath(assetPath), width, height, nodeExecutable);
             AssetDatabase.ImportAsset(assetPath);
             ConfigureSavedPng(assetPath);
@@ -143,8 +145,8 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         public static MilsymbolIconAsset SaveIconAsset(string sourceAssetPath, MilsymbolIconRequest request, Result result, string svgOverride = null)
         {
+            // Overwrite an existing icon asset with the same name instead of creating a numbered copy.
             var assetPath = Path.ChangeExtension(sourceAssetPath, ".asset").Replace("\\", "/");
-            assetPath = AssetDatabase.GenerateUniqueAssetPath(assetPath);
 
             var asset = ScriptableObject.CreateInstance<MilsymbolIconAsset>();
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(sourceAssetPath);
