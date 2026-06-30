@@ -2,32 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  ms,
-  app6b,
-  std2525b,
-  std2525c,
-  app6d,
-  std2525d,
-  std2525e,
-  path2d
-} from "../../milsymbol/index.mjs";
-
-ms.addIcons(app6b);
-ms.addIcons(std2525b);
-ms.addIcons(std2525c);
-ms.addIcons(app6d);
-ms.addIcons(std2525d);
-ms.addIcons(std2525e);
-ms.Path2D = path2d;
+// milsymbol is downloaded into ./node_modules at setup (npm install). The published
+// package's default export is the full build with all standards already included, so no
+// addIcons() is needed. We only use SVG generation (pure JS, no native dependencies);
+// PNG rasterization is done in Unity.
+import ms from "milsymbol";
+import { Resvg } from "@resvg/resvg-js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// Human-readable SIDC description, sourced from milsymbol itself (single source
-// of truth). The letter-SIDC icon names live only as keys in milsymbol's source
-// (sId["KEY"] = [icn["NAME"], ...]); we extract KEY -> [names] once so any SIDC
-// decodes correctly without hand-maintained tables.
+// Human-readable SIDC description, sourced from milsymbol's own letter-SIDC source
+// (shipped inside the npm package under src/). KEY -> [icon names] extracted once.
 // ---------------------------------------------------------------------------
 function titleCase(value) {
   return value
@@ -39,9 +25,6 @@ function titleCase(value) {
 }
 
 function cleanIconName(name) {
-  // Names look like "AR.I.UNMANNED AERIAL VEHICLE" or "GR.IC.FF.INFANTRY";
-  // the meaningful label is the last dotted segment. Slashes would clash with
-  // the field separator, so replace them with spaces.
   const tail = name.split(".").pop().replace(/\//g, " ").trim();
   return titleCase(tail);
 }
@@ -49,7 +32,7 @@ function cleanIconName(name) {
 let iconIndex = null;
 function buildIconIndex() {
   const index = {};
-  const dir = path.join(here, "..", "..", "milsymbol", "src", "lettersidc", "sidc");
+  const dir = path.join(here, "node_modules", "milsymbol", "src", "lettersidc", "sidc");
   let files = [];
   try {
     files = fs.readdirSync(dir).filter((f) => f.endsWith(".js"));
@@ -65,20 +48,16 @@ function buildIconIndex() {
       continue;
     }
 
-    // Drop comments so stray ';' or 'icn[' inside them do not pollute parsing.
     src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-
     for (const statement of src.split(";")) {
       if (statement.indexOf("sId[") === -1) {
         continue;
       }
-
       const keys = [...statement.matchAll(/sId\["([^"]+)"\]/g)].map((m) => m[1]);
       const names = [...statement.matchAll(/icn\["([^"]+)"\]/g)].map((m) => cleanIconName(m[1]));
       if (keys.length === 0 || names.length === 0) {
         continue;
       }
-
       for (const key of keys) {
         index[key] = names;
       }
@@ -118,7 +97,7 @@ function describeSidc(rawSidc) {
   if (iconIndex[generic] && iconIndex[generic].length > 0) {
     symbol = iconIndex[generic].join("_");
   } else if (s.substring(4, 10).replace(/-+$/, "").length > 0) {
-    symbol = s.substring(4, 10); // unknown function id: raw
+    symbol = s.substring(4, 10);
   }
 
   return [
@@ -141,7 +120,7 @@ if (!requestPath || !responsePath) {
 }
 
 function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
+  return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^﻿/, ""));
 }
 
 function writeJson(filePath, value) {
@@ -203,7 +182,7 @@ function standardName(standard) {
   return "";
 }
 
-async function generate(request) {
+function generate(request) {
   const sidc = cleanString(request.sidc);
   if (!sidc) {
     throw new Error("SIDC is required.");
@@ -225,14 +204,16 @@ async function generate(request) {
   const symbol = new ms.Symbol(options);
   const svg = symbol.asSVG();
   const anchor = symbol.getAnchor ? symbol.getAnchor() : { x: 0, y: 0 };
+
   const pngOutputPath = cleanString(request.pngOutputPath);
   if (pngOutputPath) {
     fs.mkdirSync(path.dirname(pngOutputPath), { recursive: true });
-    const png = await symbol.asPNG({
-      width: Number.isFinite(request.pngWidth) ? request.pngWidth : symbol.width,
-      height: Number.isFinite(request.pngHeight) ? request.pngHeight : symbol.height
+    const width = Number.isFinite(request.pngWidth) && request.pngWidth > 0 ? request.pngWidth : Math.ceil(symbol.width);
+    const resvg = new Resvg(svg, {
+      fitTo: { mode: "width", value: Math.max(1, width) },
+      background: "rgba(0,0,0,0)"
     });
-    fs.writeFileSync(pngOutputPath, png);
+    fs.writeFileSync(pngOutputPath, resvg.render().asPng());
   }
 
   return {
@@ -250,7 +231,7 @@ async function generate(request) {
 
 try {
   const request = readJson(requestPath);
-  writeJson(responsePath, await generate(request));
+  writeJson(responsePath, generate(request));
 } catch (error) {
   writeJson(responsePath, {
     ok: false,

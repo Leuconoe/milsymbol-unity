@@ -7,6 +7,11 @@ using UnityEngine;
 
 namespace Leuconoe.MilsymbolUnity.Editor
 {
+    /// <summary>
+    /// Saves a milsymbol icon as a PNG. milsymbol renders the SVG and rasterizes it to PNG
+    /// in Node via @resvg/resvg-js (downloaded alongside milsymbol at setup), so no Unity
+    /// vector package is required.
+    /// </summary>
     public static class MilsymbolPngExporter
     {
         private const string DefaultNodeExecutable = "node";
@@ -62,7 +67,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 Directory.CreateDirectory(directory);
             }
 
-            var scriptPath = FindConverterScriptPath();
+            var scriptPath = MilsymbolSvgGenerator.FindGeneratorScriptPath();
             var tempRoot = Path.Combine(Path.GetTempPath(), "milsymbol-unity");
             Directory.CreateDirectory(tempRoot);
 
@@ -84,7 +89,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 };
 
                 File.WriteAllText(requestPath, JsonUtility.ToJson(request), Utf8NoBom);
-                RunNode(string.IsNullOrWhiteSpace(nodeExecutable) ? DefaultNodeExecutable : nodeExecutable, scriptPath, requestPath, responsePath);
+                RunNode(nodeExecutable, scriptPath, requestPath, responsePath);
 
                 if (!File.Exists(responsePath))
                 {
@@ -107,24 +112,6 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 TryDelete(requestPath);
                 TryDelete(responsePath);
             }
-        }
-
-        private static string FindConverterScriptPath()
-        {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var directPath = Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node", "generate-symbol.mjs");
-            if (File.Exists(directPath))
-            {
-                return directPath;
-            }
-
-            var packagePath = Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node", "generate-symbol.mjs");
-            if (File.Exists(packagePath))
-            {
-                return packagePath;
-            }
-
-            throw new FileNotFoundException("Could not find Editor/Node/generate-symbol.mjs in Packages.");
         }
 
         private static void RunNode(string nodeExecutable, string scriptPath, string requestPath, string responsePath)

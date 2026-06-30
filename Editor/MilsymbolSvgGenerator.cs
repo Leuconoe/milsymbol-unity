@@ -246,16 +246,18 @@ namespace Leuconoe.MilsymbolUnity.Editor
             }
         }
 
-        private static string FindGeneratorScriptPath()
+        internal static string FindGeneratorScriptPath()
         {
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var directPath = Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node", "generate-symbol.mjs");
+            // Editor/Node~ uses a trailing '~' so Unity ignores the folder (and its
+            // node_modules), so the script is located by file path, not as a Unity asset.
+            var directPath = Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node~", "generate-symbol.mjs");
             if (File.Exists(directPath))
             {
                 return directPath;
             }
 
-            var packagePath = Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node", "generate-symbol.mjs");
+            var packagePath = Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node~", "generate-symbol.mjs");
             if (File.Exists(packagePath))
             {
                 return packagePath;
@@ -268,13 +270,13 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
             foreach (var match in matches)
             {
-                if (match.Replace("\\", "/").EndsWith("/Editor/Node/generate-symbol.mjs", StringComparison.Ordinal))
+                if (match.Replace("\\", "/").EndsWith("/Editor/Node~/generate-symbol.mjs", StringComparison.Ordinal))
                 {
                     return match;
                 }
             }
 
-            throw new FileNotFoundException("Could not find Editor/Node/generate-symbol.mjs in Packages.");
+            throw new FileNotFoundException("Could not find Editor/Node~/generate-symbol.mjs in Packages.");
         }
 
         private static string ToAbsoluteProjectPath(string assetPath)

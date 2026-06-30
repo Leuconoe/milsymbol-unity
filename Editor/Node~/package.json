@@ -1,0 +1,10 @@
+{
+  "name": "milsymbol-unity-node",
+  "private": true,
+  "type": "module",
+  "description": "Editor-time Node dependencies for Milsymbol Unity. milsymbol is downloaded here at setup; this folder's node_modules is not committed.",
+  "dependencies": {
+    "milsymbol": "latest",
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

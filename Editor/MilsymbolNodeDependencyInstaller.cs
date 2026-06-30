@@ -20,24 +20,19 @@ namespace Leuconoe.MilsymbolUnity.Editor
         [MenuItem("Tools/Milsymbol/Install Node Dependencies", true)]
         private static bool CanInstallFromMenu()
         {
-            return Directory.Exists(FindMilsymbolRoot(false));
+            return !string.IsNullOrEmpty(FindNodeDir(false));
         }
 
         public static bool AreDependenciesInstalled()
         {
-            var milsymbolRoot = FindMilsymbolRoot(false);
-            return !string.IsNullOrEmpty(milsymbolRoot) &&
-                   File.Exists(Path.Combine(milsymbolRoot, "node_modules", "@resvg", "resvg-js", "package.json"));
+            var nodeDir = FindNodeDir(false);
+            return !string.IsNullOrEmpty(nodeDir) &&
+                   File.Exists(Path.Combine(nodeDir, "node_modules", "milsymbol", "package.json")) &&
+                   File.Exists(Path.Combine(nodeDir, "node_modules", "@resvg", "resvg-js", "package.json"));
         }
 
         public static bool EnsureInstalledOrPrompt()
         {
-            // The submodule must be present before npm can install its dependencies.
-            if (!MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
-            {
-                return false;
-            }
-
             if (AreDependenciesInstalled())
             {
                 return true;
@@ -45,7 +40,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
             var install = EditorUtility.DisplayDialog(
                 "Milsymbol Node Dependencies",
-                "PNG export needs Node dependencies inside the bundled milsymbol submodule. Run npm install now?",
+                "Icon generation needs the milsymbol library. Download it now (npm install)?",
                 "Install",
                 "Cancel");
 
@@ -65,7 +60,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
                 AssetDatabase.Refresh();
                 EditorUtility.DisplayDialog(
                     "Milsymbol Node Dependencies",
-                    "Node dependencies are installed.",
+                    "milsymbol is installed.",
                     "OK");
                 return true;
             }
@@ -86,21 +81,19 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static string Install()
         {
-            MilsymbolSubmoduleInstaller.EnsureCheckedOut(false);
-
-            var milsymbolRoot = FindMilsymbolRoot(true);
-            var packageJson = Path.Combine(milsymbolRoot, "package.json");
+            var nodeDir = FindNodeDir(true);
+            var packageJson = Path.Combine(nodeDir, "package.json");
             if (!File.Exists(packageJson))
             {
-                throw new FileNotFoundException("Could not find milsymbol/package.json.", packageJson);
+                throw new FileNotFoundException("Could not find Editor/Node/package.json.", packageJson);
             }
 
             EditorUtility.DisplayProgressBar(
                 "Milsymbol Node Dependencies",
-                "Running npm install --omit=dev in " + milsymbolRoot,
+                "Downloading milsymbol (npm install) in " + nodeDir,
                 0.5f);
 
-            return RunNpmInstall(milsymbolRoot);
+            return RunNpmInstall(nodeDir);
         }
 
         private static string RunNpmInstall(string workingDirectory)
@@ -169,18 +162,18 @@ namespace Leuconoe.MilsymbolUnity.Editor
             }
         }
 
-        private static string FindMilsymbolRoot(bool throwIfMissing)
+        private static string FindNodeDir(bool throwIfMissing)
         {
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var candidates = new[]
             {
-                Path.Combine(projectRoot, "Packages", "milsymbol-unity", "milsymbol"),
-                Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "milsymbol")
+                Path.Combine(projectRoot, "Packages", "milsymbol-unity", "Editor", "Node~"),
+                Path.Combine(projectRoot, "Packages", "com.leuconoe.milsymbol-unity", "Editor", "Node~")
             };
 
             foreach (var candidate in candidates)
             {
-                if (Directory.Exists(candidate))
+                if (File.Exists(Path.Combine(candidate, "package.json")))
                 {
                     return candidate;
                 }
@@ -189,7 +182,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
             if (throwIfMissing)
             {
                 throw new DirectoryNotFoundException(
-                    "Could not find the bundled milsymbol submodule under Packages/milsymbol-unity/milsymbol.");
+                    "Could not find Editor/Node~/package.json under Packages/milsymbol-unity.");
             }
 
             return "";
@@ -204,7 +197,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
         private static ProcessStartInfo BuildNpmInstallStartInfo(string workingDirectory)
         {
             var node = MilsymbolToolLocator.ResolveNode();
-            const string npmArguments = "install --omit=dev";
+            const string npmArguments = "install";
 
             var startInfo = new ProcessStartInfo
             {

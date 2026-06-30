@@ -5,6 +5,42 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0]
+
+First stable release. Consolidates the 0.x iterations into a clean, submodule-free package.
+
+### Added
+
+- **SIDC Builder + Variant dropdown** — Coding Scheme / Affiliation / Battle Dimension /
+  Status, Specific Symbol per domain, and a dependent Variant dropdown for function-id
+  sub-types (e.g. UAV roles: Reconnaissance / Attack / Bomber). Variant is disabled for
+  symbols without sub-types.
+- **Direct SIDC input** that stays in two-way sync with the builder.
+- **Batch generation** — comma/semicolon/newline-separated SIDCs generated into the Output
+  Folder in one click.
+- **Texture Size** setting (imported sprite `maxTextureSize`, default 128).
+- **Decoded SIDC description** on `MilsymbolIconAsset`, sourced from milsymbol's own
+  letter-SIDC data so any SIDC decodes accurately.
+- Tooltips with `(?)` markers on builder fields.
+
+### Changed
+
+- **No git submodule.** `milsymbol` and `@resvg/resvg-js` are downloaded from npm at setup
+  (`Tools/Milsymbol/Install Node Dependencies` → `npm install` in `Editor/Node~`). Uses
+  upstream `milsymbol` instead of a fork.
+- **SVG → PNG rasterization via `@resvg/resvg-js`** in Node — no Unity vector-graphics
+  dependency.
+- `node`/`npm`/`git` are resolved from common install locations so generation works even when
+  Unity (launched from Unity Hub) does not inherit the login-shell `PATH`.
+- Saving overwrites a same-named file instead of creating a numbered copy; the Output Folder
+  persists across editor restarts.
+- The Node setup section is a foldout (expanded only until setup is complete).
+
+### Removed
+
+- The `milsymbol` git submodule, `.gitmodules`, the submodule installer/menu, and the prior
+  Node-side PNG export (replaced by `@resvg`).
+
 ## [0.2.0]
 
 ### Added

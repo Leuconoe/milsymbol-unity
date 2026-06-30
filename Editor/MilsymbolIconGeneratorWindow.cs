@@ -316,29 +316,14 @@ namespace Leuconoe.MilsymbolUnity.Editor
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         EditorGUILayout.LabelField(
-                            "milsymbol Submodule",
-                            MilsymbolSubmoduleInstaller.IsCheckedOut() ? "Ready" : "Missing");
-
-                        if (GUILayout.Button("Update", GUILayout.Width(96)))
-                        {
-                            if (MilsymbolSubmoduleInstaller.EnsureCheckedOut(true))
-                            {
-                                status = "milsymbol submodule is ready.";
-                            }
-                        }
-                    }
-
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.LabelField(
-                            "Node Dependencies",
+                            "milsymbol (npm)",
                             MilsymbolNodeDependencyInstaller.AreDependenciesInstalled() ? "Installed" : "Missing");
 
                         if (GUILayout.Button("Install", GUILayout.Width(96)))
                         {
                             if (MilsymbolNodeDependencyInstaller.InstallWithDialog())
                             {
-                                status = "Node dependencies are installed.";
+                                status = "milsymbol is installed.";
                             }
                         }
                     }
@@ -645,8 +630,7 @@ namespace Leuconoe.MilsymbolUnity.Editor
 
         private static bool IsNodeSetupComplete()
         {
-            return MilsymbolSubmoduleInstaller.IsCheckedOut() &&
-                   MilsymbolNodeDependencyInstaller.AreDependenciesInstalled();
+            return MilsymbolNodeDependencyInstaller.AreDependenciesInstalled();
         }
 
         private void SetOutputFolder(string folder)

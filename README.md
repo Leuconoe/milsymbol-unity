@@ -1,116 +1,109 @@
 # Milsymbol Unity
 
-Unity package tooling for generating MIL-STD-2525/APP-6 military symbol icons from the JavaScript `milsymbol` source at editor time.
-
-This package does not generate symbols at build runtime. Unity Editor calls the bundled `milsymbol` submodule through Node.js, exports icon-only PNG files, and stores optional `MilsymbolIconAsset` metadata for runtime use.
+Unity editor tooling for generating **MIL-STD-2525 / APP-6** military symbol icons as PNG
+sprites, powered by the JavaScript [`milsymbol`](https://github.com/spatialillusions/milsymbol)
+library. Symbols are generated at **edit time** — runtime code only consumes the produced
+PNG sprites and optional `MilsymbolIconAsset` metadata.
 
 ![Milsymbol Unity icon generator](Documentation~/screenshot.png)
 
-## Features
+## How it works
 
-- Unity Package layout with runtime and editor assemblies.
-- SIDC Builder dropdown workflow plus direct SIDC input.
-- Letter SIDC and numeric SIDC generation through bundled `milsymbol`.
-- Icon-only output: `infoFields=false` removes text fields and information-field arrows.
-- PNG export through `milsymbol`'s Node-side `Symbol.asPNG()` API.
-- Editor window at `Tools/Milsymbol/Icon Generator`.
-- Auto Preview toggle with debounced generation.
-- Unity color fields for fill, frame, icon, outline, and mono-color overrides.
-- Automatic SIDC-based PNG file names, such as `SFAPMFQ----B---.png`.
-- Optional `MilsymbolIconAsset` creation.
-- `MilsymbolIconAsset` context menu regeneration that overwrites the existing PNG when possible.
-- Sprite Atlas creation with the output folder registered as the packable.
-- Unity menu-driven Node dependency installation.
+1. The Unity editor calls **Node.js**, which runs upstream `milsymbol` to produce an SVG for a
+   given SIDC.
+2. The SVG is rasterized to PNG by **[`@resvg/resvg-js`](https://www.npmjs.com/package/@resvg/resvg-js)**
+   (Node side) — no Unity vector-graphics package required.
+3. The PNG is imported as a Unity Sprite; an optional `MilsymbolIconAsset` stores the SIDC, a
+   human-readable decoded description, style, size, anchor, and texture reference.
+
+`milsymbol` and `@resvg/resvg-js` are **downloaded from npm at setup** — there is no git
+submodule to manage.
 
 ## Requirements
 
-- Unity 2021.3 or newer.
-- Node.js installed. It does **not** need to be on the Editor's `PATH`: the editor tooling
-  probes common install locations (Program Files, Homebrew, nvm, fnm, volta, asdf) and, on
+- Unity **2021.3** or newer.
+- **Node.js** installed. It does *not* need to be on the Editor's `PATH`: the tooling probes
+  common install locations (Program Files, Homebrew, nvm, fnm, volta, asdf) and, on
   macOS/Linux, falls back to your login shell. If auto-detection fails, set the full path to
-  the `node` binary in `Tools/Milsymbol/Icon Generator` > `Node Executable`.
-- The `milsymbol` submodule checked out under this package.
+  the `node` binary in `Tools/Milsymbol/Icon Generator` › `Node Executable`.
 
 ## Installation
 
-### Recommended: clone into your project's `Packages` folder
-
-Unity Package Manager git-URL installs do **not** fetch git submodules, so the bundled
-`milsymbol` source would be missing. Clone the package with submodules instead:
-
-```bash
-cd <your-unity-project>/Packages
-git clone --recurse-submodules https://github.com/Leuconoe/milsymbol-unity.git
-```
-
-If you already cloned without `--recurse-submodules`, initialize the submodule:
-
-```bash
-git submodule update --init --recursive
-```
-
-From inside Unity you can also run:
+Install via Unity Package Manager (Git URL) or clone into your project's `Packages` folder:
 
 ```text
-Tools/Milsymbol/Update milsymbol Submodule
+https://github.com/Leuconoe/milsymbol-unity.git
 ```
 
-This is invoked automatically the first time you install Node dependencies or generate an
-icon, and reports an actionable message when the package is not a git working copy (the
-case for UPM git-URL installs).
-
-### Install Node dependencies
+Then download the Node dependencies (one time):
 
 ```text
 Tools/Milsymbol/Install Node Dependencies
 ```
 
-The installer runs `npm install --omit=dev` inside the bundled `milsymbol` submodule so only
-production dependencies needed for PNG export are installed. npm is invoked through the
-resolved `node` binary (`node npm-cli.js`) so it works even when `npm`/`npm.cmd` is not on the
-Editor's `PATH`.
+This runs `npm install` in `Editor/Node~`, fetching the latest published `milsymbol` and
+`@resvg/resvg-js` into `Editor/Node~/node_modules` (git-ignored, and ignored by Unity because
+the folder name ends with `~`). It also runs automatically the first time you generate an
+icon. npm is invoked through the resolved `node` binary, so it works even when `npm`/`npm.cmd`
+is not on the Editor's `PATH`.
 
 ## Usage
 
-1. Install the package through Package Manager.
-2. Open `Tools/Milsymbol/Icon Generator`.
-3. Install Node dependencies if the window shows `Missing`.
-4. Build a SIDC with dropdowns, or disable `Use SIDC Builder` and enter one directly.
-5. Adjust style, color, PNG size, and `Auto Preview` as needed.
-6. Click `Generate` and `Save PNG`.
+Open `Tools/Milsymbol/Icon Generator`.
 
-Generated PNG files are imported as Unity Sprites. If `Create .asset` is enabled, a `MilsymbolIconAsset` is saved next to the PNG with the SIDC, style, generated SVG source, dimensions, anchor, validity flag, and texture reference.
+### Build a symbol
 
-To regenerate an existing icon asset, right-click a `MilsymbolIconAsset` and choose:
+- **SIDC field** — always directly editable. Type a 15-character letter SIDC, or use the
+  builder below; the two stay in sync.
+- **SIDC Builder** — Coding Scheme / Affiliation / Battle Dimension / Status, a **Specific
+  Symbol** dropdown for the chosen domain, a **Variant** dropdown for sub-types (e.g. UAV
+  roles: Reconnaissance / Attack / Bomber), modifiers, country code, and order of battle.
+  For symbols not in the curated list, type the SIDC directly.
+- **Style** — size, frame, fill, square canvas, colors (fill / frame / icon / outline / mono),
+  opacity, stroke and outline width.
+- Hover any field's `(?)` label for help.
 
-```text
-Milsymbol/Regenerate Icon
-```
+### Output
+
+- **Output Folder** — project-relative folder under `Assets` (persists across restarts).
+- **Texture Size** — imported sprite `maxTextureSize` (default 128).
+- **Generate** then **Save PNG**. PNG files are imported as Sprites and registered into a
+  `Milsymbol Icons.spriteatlas`. With `Create .asset` on, a `MilsymbolIconAsset` is written
+  next to the PNG.
+
+### Batch generation
+
+In the **Batch** section, enter multiple SIDCs separated by commas, semicolons, or new lines
+and click **Generate To Folder** to write them all into the Output Folder at once.
+
+### Regenerate
+
+Right-click a `MilsymbolIconAsset` and choose `Milsymbol/Regenerate Icon` (the existing PNG is
+overwritten and the previous texture size is preserved).
+
+## MilsymbolIconAsset
+
+Stores the SIDC, a **decoded description** sourced from milsymbol itself (so any SIDC decodes
+accurately, e.g. `Warfighting/Friend/Air/Present/Unmanned Aerial Vehicle_Reconnaissance/-/-/--/-`),
+the style, dimensions, anchor, validity flag, and the texture reference.
 
 ## Security Notes
 
-- PNG paths written by normal package saves are constrained to the Unity project's `Assets` folder.
+- PNG paths written by normal package saves are constrained to the project's `Assets` folder.
 - Local file export uses Unity's save dialog and is intentionally allowed to write outside `Assets`.
-- Node is launched without shell execution.
-- JSON request files are written as UTF-8 without BOM and read with BOM stripping.
-- Production dependency audit was checked with `npm audit --omit=dev`; no vulnerabilities were reported.
-- Full dev dependency audit reports existing upstream development-tool vulnerabilities in `milsymbol`'s devDependencies. The Unity installer avoids installing those by using `--omit=dev`.
-
-## Porting Boundary
-
-The current port keeps JavaScript as the source of truth. Runtime C# code consumes generated PNG and ScriptableObject assets only. If runtime generation becomes necessary, the next step is either a C# draw-instruction pipeline rewrite or embedding a JavaScript runtime.
+- Node is launched without shell execution. JSON request files are UTF-8 without BOM.
+- Setup installs only the two production dependencies (`milsymbol`, `@resvg/resvg-js`) into
+  `Editor/Node~/node_modules`, which is git-ignored.
 
 ## Acknowledgements
 
-This package is only a thin Unity editor wrapper. All military symbol rendering is done by
+This package is a thin Unity editor wrapper. All military symbol rendering is done by
 **[milsymbol](https://github.com/spatialillusions/milsymbol)** by Måns Beckman
-([spatialillusions](https://github.com/spatialillusions)), released under the MIT License.
-All credit and respect for the symbology engine and its MIL-STD-2525 / APP-6 icon data goes
-to the original author and the milsymbol contributors. This project would not exist without
-their work — please support and star the upstream project.
-
-The bundled `milsymbol` submodule retains its original MIT license; see
-`milsymbol/LICENSE`.
+([spatialillusions](https://github.com/spatialillusions)), released under the MIT License. All
+credit and respect for the symbology engine and its MIL-STD-2525 / APP-6 icon data goes to the
+original author and the milsymbol contributors — please support and star the upstream project.
+SVG rasterization uses [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js) (MIT). Both are
+downloaded from npm at setup and retain their own licenses.
 
 ## Changelog
 
